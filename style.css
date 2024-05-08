@@ -131,3 +131,15 @@ canvas {
         margin-top: 10px; /* Smaller top margin on small screens */
     }
 }
+
+.alert-indicator {
+    padding: 10px;
+    margin-top: 5px;
+    background-color: green; /* Default no alert */
+    color: white;
+    font-weight: bold;
+}
+
+.alert-indicator.active {
+    background-color: red; /* Alert active */
+}
