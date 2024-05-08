@@ -24,6 +24,7 @@
                 </div>
                 <div class="thresholds">
                     <h2>Thresholds</h2>
+                    <!-- Temperature Threshold -->
                     <div>
                         <label for="temperatureThresholdMax">Temperature Threshold Max(°C):</label>
                         <input type="number" id="temperatureThresholdMax" value="30">
@@ -31,28 +32,50 @@
                         <label for="temperatureThresholdMin">Temperature Threshold Min(°C):</label>
                         <input type="number" id="temperatureThresholdMin" value="20">
                     </div>
+                    <!-- Humidity Threshold -->
                     <div>
                         <label for="humidityThresholdMax">Humidity Threshold Max(%):</label>
                         <input type="number" id="humidityThresholdMax" value="70">
                         <label for="humidityThresholdMin">Humidity Threshold Min(%):</label>
                         <input type="number" id="humidityThresholdMin" value="40">
                     </div>
+                    <!-- Air Quality Threshold -->
                     <div>
                         <label for="airQualityThresholdMax">Air Quality Threshold Max:</label>
                         <input type="number" id="airQualityThresholdMax" value="100">
                         <label for="airQualityThresholdMin">Air Quality Threshold Min:</label>
                         <input type="number" id="airQualityThresholdMin" value="80">
                     </div>
+                    <!-- Noise Threshold -->
+                    <div>
+                        <label for="noiseThresholdMax">Noise Threshold Max:</label>
+                        <input type="number" id="noiseThresholdMax" value="80">
+                        <label for="noiseThresholdMin">Noise Threshold Min:</label>
+                        <input type="number" id="noiseThresholdMin" value="40">
+                    </div>
+                    <!-- Gas Threshold -->
+                    <div>
+                        <label for="gasThresholdMax">Gas Threshold Max:</label>
+                        <input type="number" id="gasThresholdMax" value="50">
+                        <label for="gasThresholdMin">Gas Threshold Min:</label>
+                        <input type="number" id="gasThresholdMin" value="10">
+                    </div>
                     <button id="setThresholdBtn">Set Thresholds</button>
                 </div>
                 <div class="alerts">
                     <h2>Alerts</h2>
+                    <!-- Temperature Alert -->
                     <div id="temperatureAlert" class="alert-indicator">Temperature Alert</div>
+                    <!-- Humidity Alert -->
                     <div id="humidityAlert" class="alert-indicator">Humidity Alert</div>
+                    <!-- Air Quality Alert -->
                     <div id="airQualityAlert" class="alert-indicator">Air Quality Alert</div>
+                    <!-- Noise Alert -->
+                    <div id="noiseAlert" class="alert-indicator">Noise Alert</div>
+                    <!-- Gas Alert -->
+                    <div id="gasAlert" class="alert-indicator">Gas Alert</div>
                     <button id="toggleAlertBtn">Disable Alerts</button>
                 </div>
-
             </div>
         </aside>
         <!-- Main Content -->
@@ -74,6 +97,16 @@
                 <div class="data-item">
                     <h2>Air Quality</h2>
                     <p class="value" id="air-quality">Loading...</p>
+                </div>
+                <!-- Noise -->
+                <div class="data-item">
+                    <h2>Noise</h2>
+                    <p class="value" id="noise">Loading...</p>
+                </div>
+                <!-- Gas -->
+                <div class="data-item">
+                    <h2>Gas</h2>
+                    <p class="value" id="gas">Loading...</p>
                 </div>
             </div>
             <!-- Chart -->
@@ -100,27 +133,32 @@
             appId: "1:812198309772:web:0ae4a87d44c070ea5830a9"
         };
 
-
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
 
-        // Reference to temperature, humidity, and air quality data in Firebase
+        // Reference to temperature, humidity, air quality, noise, and gas data in Firebase
         const temperatureRef = ref(database, 'DHT_11/Temperature');
         const humidityRef = ref(database, 'DHT_11/Humidity');
-        const airQualityRef = ref(database, 'air_quality');
+        const airQualityRef = ref(database, 'DHT_11/air_quality');
+        const noiseRef = ref(database, 'DHT_11/noise');
+        const gasRef = ref(database, 'hazardous_gas');
 
         // Arrays to store historical data
         let temperatureData = [];
         let humidityData = [];
         let airQualityData = [];
+        let noiseData = [];
+        let gasData = [];
         let timeLabels = [];
 
         // Default threshold values
         const defaultThresholds = {
             temperature: { max: 30, min: 20 },
             humidity: { max: 70, min: 40 },
-            airQuality: { max: 100, min: 80 }
+            airQuality: { max: 100, min: 80 },
+            noise: { max: 80, min: 40 },
+            gas: { max: 50, min: 10 }
         };
 
         // Chart.js initialization
@@ -161,6 +199,26 @@
             }
         });
 
+        // Update noise value on change
+        onValue(noiseRef, (snapshot) => {
+            const noiseLevel = snapshot.val();
+            document.getElementById('noise').innerHTML = noiseLevel ? `${noiseLevel} dB` : "--";
+            noiseData.push(noiseLevel);
+            if (alertSystemEnabled) {
+                displayAlerts();
+            }
+        });
+
+        // Update gas value on change
+        onValue(gasRef, (snapshot) => {
+            const gasLevel = snapshot.val();
+            document.getElementById('gas').innerHTML = gasLevel ? gasLevel : "--";
+            gasData.push(gasLevel);
+            if (alertSystemEnabled) {
+                displayAlerts();
+            }
+        });
+
         // Update chart
         function updateChart() {
             const currentTime = new Date();
@@ -186,6 +244,18 @@
                             data: humidityData,
                             borderColor: 'rgb(54, 162, 235)',
                             fill: false
+                        },
+                        {
+                            label: 'Noise (dB)',
+                            data: noiseData,
+                            borderColor: 'rgb(255, 206, 86)',
+                            fill: false
+                        },
+                        {
+                            label: 'Gas',
+                            data: gasData,
+                            borderColor: 'rgb(75, 192, 192)',
+                            fill: false
                         }
                     ]
                 },
@@ -208,125 +278,159 @@
         });
 
         // Define thresholds for automatic observations
-const thresholds = {
-    temperature: {
-        cold: 15,
-        hot: 30,
-        optimalLow: 18,
-        optimalHigh: 26
-    },
-    humidity: {
-        low: 30,
-        high: 70,
-        optimalLow: 40,
-        optimalHigh: 60
-    },
-    airQuality: {
-        poor: 150,
-        moderate: 100,
-        good: 50
-    }
-};
+        const thresholds = {
+            temperature: {
+                cold: 15,
+                hot: 30,
+                optimalLow: 18,
+                optimalHigh: 26
+            },
+            humidity: {
+                low: 30,
+                high: 70,
+                optimalLow: 40,
+                optimalHigh: 60
+            },
+            airQuality: {
+                poor: 150,
+                moderate: 100,
+                good: 50
+            },
+            noise: {
+                low: 40,
+                high: 80
+            },
+            gas: {
+                low: 10,
+                high: 50
+            }
+        };
 
-function downloadChartAsPDF() {
-    // Assuming calculateAverage and data arrays are defined elsewhere in your script
-    const averageTemperature = calculateAverage(temperatureData);
-    const averageHumidity = calculateAverage(humidityData);
-    const averageAirQuality = calculateAverage(airQualityData);
+        function downloadChartAsPDF() {
+            // Assuming calculateAverage and data arrays are defined elsewhere in your script
+            const averageTemperature = calculateAverage(temperatureData);
+            const averageHumidity = calculateAverage(humidityData);
+            const averageAirQuality = calculateAverage(airQualityData);
+            const averageNoise = calculateAverage(noiseData);
+            const averageGas = calculateAverage(gasData);
 
-    // Generate observations based on the averages and predefined thresholds
-    const temperatureObservation = generateTemperatureObservation(averageTemperature);
-    const humidityObservation = generateHumidityObservation(averageHumidity);
-    const airQualityObservation = generateAirQualityObservation(averageAirQuality);
+            // Generate observations based on the averages and predefined thresholds
+            const temperatureObservation = generateTemperatureObservation(averageTemperature);
+            const humidityObservation = generateHumidityObservation(averageHumidity);
+            const airQualityObservation = generateAirQualityObservation(averageAirQuality);
+            const noiseObservation = generateNoiseObservation(averageNoise);
+            const gasObservation = generateGasObservation(averageGas);
 
-    // Create a PDF
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4'
-    });
+            // Create a PDF
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({
+                orientation: 'portrait',
+                unit: 'pt',
+                format: 'a4'
+            });
 
-    pdf.setFontSize(22);
-    pdf.text("Environmental Data Report", 40, 50);
-    pdf.setFontSize(12);
-    pdf.text(`Date: ${new Date().toLocaleDateString()}`, 40, 70);
+            pdf.setFontSize(22);
+            pdf.text("Environmental Data Report", 40, 50);
+            pdf.setFontSize(12);
+            pdf.text(`Date: ${new Date().toLocaleDateString()}`, 40, 70);
 
-    // Add the chart image
-    const chartImage = document.getElementById('chart').toDataURL('image/png');
-    pdf.addImage(chartImage, 'PNG', 40, 100, 500, 300);
+            // Add the chart image
+            const chartImage = document.getElementById('chart').toDataURL('image/png');
+            pdf.addImage(chartImage, 'PNG', 40, 100, 500, 300);
 
-    // Add a detailed summary
-    pdf.setFontSize(14);
-    pdf.text("Detailed Summary and Statistics:", 40, 420);
-    pdf.setFontSize(12);
-    pdf.text([
-        `Temperature - Average: ${averageTemperature.toFixed(1)}°C, Observation: ${temperatureObservation}`,
-        `Humidity - Average: ${averageHumidity.toFixed(1)}%, Observation: ${humidityObservation}`,
-        `Air Quality - Average: ${averageAirQuality.toFixed(1)}, Observation: ${airQualityObservation}`
-    ], 40, 440);
+            // Add a detailed summary
+            pdf.setFontSize(14);
+            pdf.text("Detailed Summary and Statistics:", 40, 420);
+            pdf.setFontSize(12);
+            pdf.text([
+                `Temperature - Average: ${averageTemperature.toFixed(1)}°C, Observation: ${temperatureObservation}`,
+                `Humidity - Average: ${averageHumidity.toFixed(1)}%, Observation: ${humidityObservation}`,
+                `Air Quality - Average: ${averageAirQuality.toFixed(1)}, Observation: ${airQualityObservation}`,
+                `Noise - Average: ${averageNoise.toFixed(1)} dB, Observation: ${noiseObservation}`,
+                `Gas - Average: ${averageGas.toFixed(1)}, Observation: ${gasObservation}`
+            ], 40, 440);
 
-    // Save the PDF
-    pdf.save('environmental_data_report.pdf');
-}
+            // Save the PDF
+            pdf.save('environmental_data_report.pdf');
+        }
 
-// Observation generator functions
-function generateTemperatureObservation(averageTemperature) {
-    if (averageTemperature < thresholds.temperature.cold) {
-        return "Unusually cold, consider increasing heating.";
-    } else if (averageTemperature > thresholds.temperature.hot) {
-        return "Excessively hot, consider cooling solutions.";
-    } else if (averageTemperature >= thresholds.temperature.optimalLow && averageTemperature <= thresholds.temperature.optimalHigh) {
-        return "Temperature is within optimal range.";
-    } else {
-        return "Temperature is moderate.";
-    }
-}
+        // Observation generator functions
+        function generateTemperatureObservation(averageTemperature) {
+            if (averageTemperature < thresholds.temperature.cold) {
+                return "Unusually cold, consider increasing heating.";
+            } else if (averageTemperature > thresholds.temperature.hot) {
+                return "Excessively hot, consider cooling solutions.";
+            } else if (averageTemperature >= thresholds.temperature.optimalLow && averageTemperature <= thresholds.temperature.optimalHigh) {
+                return "Temperature is within optimal range.";
+            } else {
+                return "Temperature is moderate.";
+            }
+        }
 
-function generateHumidityObservation(averageHumidity) {
-    if (averageHumidity < thresholds.humidity.low) {
-        return "Too dry, potential discomfort or health risks.";
-    } else if (averageHumidity > thresholds.humidity.high) {
-        return "Too humid, potential for mold growth or discomfort.";
-    } else if (averageHumidity >= thresholds.humidity.optimalLow && averageHumidity <= thresholds.humidity.optimalHigh) {
-        return "Humidity is within optimal range.";
-    } else {
-        return "Humidity is moderate.";
-    }
-}
+        function generateHumidityObservation(averageHumidity) {
+            if (averageHumidity < thresholds.humidity.low) {
+                return "Too dry, potential discomfort or health risks.";
+            } else if (averageHumidity > thresholds.humidity.high) {
+                return "Too humid, potential for mold growth or discomfort.";
+            } else if (averageHumidity >= thresholds.humidity.optimalLow && averageHumidity <= thresholds.humidity.optimalHigh) {
+                return "Humidity is within optimal range.";
+            } else {
+                return "Humidity is moderate.";
+            }
+        }
 
-function generateAirQualityObservation(averageAirQuality) {
-    if (averageAirQuality > thresholds.airQuality.poor) {
-        return "Poor air quality, consider air purification measures.";
-    } else if (averageAirQuality <= thresholds.airQuality.good) {
-        return "Good air quality.";
-    } else {
-        return "Moderate air quality.";
-    }
-}
+        function generateAirQualityObservation(averageAirQuality) {
+            if (averageAirQuality > thresholds.airQuality.poor) {
+                return "Poor air quality, consider air purification measures.";
+            } else if (averageAirQuality <= thresholds.airQuality.good) {
+                return "Good air quality.";
+            } else {
+                return "Moderate air quality.";
+            }
+        }
 
+        function generateNoiseObservation(averageNoise) {
+            if (averageNoise < thresholds.noise.low) {
+                return "Noise level is too low, consider checking sensor or environment.";
+            } else if (averageNoise > thresholds.noise.high) {
+                return "High noise level detected, potential disturbance or health risks.";
+            } else {
+                return "Noise level is moderate.";
+            }
+        }
+
+        function generateGasObservation(averageGas) {
+            if (averageGas < thresholds.gas.low) {
+                return "Gas level is too low, considered safe.";
+            } else if (averageGas > thresholds.gas.high) {
+                return "Hazardous gas detected, take immediate action.";
+            } else {
+                return "Gas level is within safe range.";
+            }
+        }
 
         // Helper function to calculate average
         function calculateAverage(data) {
             return data.reduce((sum, value) => sum + (value || 0), 0) / data.length;
         }
 
-
         // Function to download CSV data
         function downloadCsvData() {
             // Format data into CSV format
-            let csvContent = "Time, Temperature (°C), Humidity (%), Air Quality\n";
+            let csvContent = "Time, Temperature (°C), Humidity (%), Air Quality, Noise (dB), Gas\n";
             for (let i = 0; i < timeLabels.length; i++) {
-                csvContent += `${timeLabels[i]},${temperatureData[i] || ''},${humidityData[i] || ''},${airQualityData[i] || ''}\n`;
+                csvContent += `${timeLabels[i]},${temperatureData[i] || ''},${humidityData[i] || ''},${airQualityData[i] || ''},${noiseData[i] || ''},${gasData[i] || ''}\n`;
             }
 
             // Calculate averages
-            const averageTemperature = temperatureData.reduce((acc, curr) => acc + (curr || 0), 0) / temperatureData.length;
-            const averageHumidity = humidityData.reduce((acc, curr) => acc + (curr || 0), 0) / humidityData.length;
-            const averageAirQuality = airQualityData.reduce((acc, curr) => acc + (curr || 0), 0) / airQualityData.length;
+            const averageTemperature = calculateAverage(temperatureData);
+            const averageHumidity = calculateAverage(humidityData);
+            const averageAirQuality = calculateAverage(airQualityData);
+            const averageNoise = calculateAverage(noiseData);
+            const averageGas = calculateAverage(gasData);
 
             // Append averages to the CSV content
-            csvContent += `\nAverage, ${averageTemperature.toFixed(2)}, ${averageHumidity.toFixed(2)}, ${averageAirQuality.toFixed(2)}`;
+            csvContent += `\nAverage, ${averageTemperature.toFixed(2)}, ${averageHumidity.toFixed(2)}, ${averageAirQuality.toFixed(2)}, ${averageNoise.toFixed(2)}, ${averageGas.toFixed(2)}`;
 
             // Create a Blob with the CSV content
             const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -345,24 +449,29 @@ function generateAirQualityObservation(averageAirQuality) {
             URL.revokeObjectURL(url);
         }
 
-
         // Function to display alerts
         function displayAlerts() {
             const latestTemperature = temperatureData[temperatureData.length - 1];
             const latestHumidity = humidityData[humidityData.length - 1];
             const latestAirQuality = airQualityData[airQualityData.length - 1];
+            const latestNoise = noiseData[noiseData.length - 1];
+            const latestGas = gasData[gasData.length - 1];
 
             // Thresholds retrieved from input values
             const thresholds = {
                 temperature: { max: parseInt(document.getElementById('temperatureThresholdMax').value), min: parseInt(document.getElementById('temperatureThresholdMin').value) },
                 humidity: { max: parseInt(document.getElementById('humidityThresholdMax').value), min: parseInt(document.getElementById('humidityThresholdMin').value) },
-                airQuality: { max: parseInt(document.getElementById('airQualityThresholdMax').value), min: parseInt(document.getElementById('airQualityThresholdMin').value) }
+                airQuality: { max: parseInt(document.getElementById('airQualityThresholdMax').value), min: parseInt(document.getElementById('airQualityThresholdMin').value) },
+                noise: { max: parseInt(document.getElementById('noiseThresholdMax').value), min: parseInt(document.getElementById('noiseThresholdMin').value) },
+                gas: { max: parseInt(document.getElementById('gasThresholdMax').value), min: parseInt(document.getElementById('gasThresholdMin').value) }
             };
 
             // Set indicator status based on thresholds
             setAlertStatus('temperatureAlert', latestTemperature, thresholds.temperature);
             setAlertStatus('humidityAlert', latestHumidity, thresholds.humidity);
             setAlertStatus('airQualityAlert', latestAirQuality, thresholds.airQuality);
+            setAlertStatus('noiseAlert', latestNoise, thresholds.noise);
+            setAlertStatus('gasAlert', latestGas, thresholds.gas);
         }
 
         function setAlertStatus(id, value, threshold) {
@@ -374,24 +483,22 @@ function generateAirQualityObservation(averageAirQuality) {
             }
         }
 
-
-        function showAlert(message, type) {
-            const alertList = document.getElementById('alertList');
-            const alertItem = document.createElement('li');
-            alertItem.innerHTML = `<span class="blinking-circle"></span>${message}`;
-            alertList.appendChild(alertItem);
-            if (type === 'temperature' || type === 'humidity' || type === 'airQuality') {
-                alertItem.querySelector('.blinking-circle').classList.add('red');
-            }
-        }
-
         // Toggle alert system
-        document.getElementById('toggleAlertBtn').addEventListener('click', () => {
+        document.getElementById('toggleAlertBtn').addEventListener('click', function () {
             alertSystemEnabled = !alertSystemEnabled;
-            const btnText = alertSystemEnabled ? 'Disable Alerts' : 'Enable Alerts';
-            document.getElementById('toggleAlertBtn').textContent = btnText;
+            this.textContent = alertSystemEnabled ? 'Disable Alerts' : 'Enable Alerts';
+            if (!alertSystemEnabled) {
+                // Clear all alerts if system is disabled
+                document.querySelectorAll('.alert-indicator').forEach(alert => {
+                    alert.classList.remove('active');
+                });
+            }
         });
 
+        // Set threshold values
+        document.getElementById('setThresholdBtn').addEventListener('click', function () {
+            displayAlerts();
+        });
     </script>
 </body>
 
