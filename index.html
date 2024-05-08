@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EVM (Environmental Monitoring System)</title>
+    <!-- Material Icons CDN -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside>
+            <div class="top">
+                <div class="logo">
+                    <h2>EVM <span class="sub-title">Environmental Analysis System</span></h2>
+                </div>
+                <div class="thresholds">
+                    <h2>Thresholds</h2>
+                    <div>
+                        <label for="temperatureThresholdMax">Temperature Threshold Max(°C):</label>
+                        <input type="number" id="temperatureThresholdMax" value="30">
+                        <br>
+                        <label for="temperatureThresholdMin">Temperature Threshold Min(°C):</label>
+                        <input type="number" id="temperatureThresholdMin" value="20">
+                    </div>
+                    <div>
+                        <label for="humidityThresholdMax">Humidity Threshold Max(%):</label>
+                        <input type="number" id="humidityThresholdMax" value="70">
+                        <label for="humidityThresholdMin">Humidity Threshold Min(%):</label>
+                        <input type="number" id="humidityThresholdMin" value="40">
+                    </div>
+                    <div>
+                        <label for="airQualityThresholdMax">Air Quality Threshold Max:</label>
+                        <input type="number" id="airQualityThresholdMax" value="100">
+                        <label for="airQualityThresholdMin">Air Quality Threshold Min:</label>
+                        <input type="number" id="airQualityThresholdMin" value="80">
+                    </div>
+                    <button id="setThresholdBtn">Set Thresholds</button>
+                </div>
+                <div class="alerts">
+                    <h2>Alerts</h2>
+                    <ul id="alertList"></ul>
+                    <button id="toggleAlertBtn">Disable Alerts</button>
+                </div>
+            </div>
+        </aside>
+        <!-- Main Content -->
+        <main>
+            <h1>Dashboard</h1>
+            <button id="downloadCsvBtn">Download CSV Data</button>
+            <div class="insights">
+                <!-- Temperature -->
+                <div class="data-item">
+                    <h2>Temperature</h2>
+                    <p class="value" id="temperature">Loading...</p>
+                </div>
+                <!-- Humidity -->
+                <div class="data-item">
+                    <h2>Humidity</h2>
+                    <p class="value" id="humidity">Loading...</p>
+                </div>
+                <!-- Air Quality -->
+                <div class="data-item">
+                    <h2>Air Quality</h2>
+                    <p class="value" id="air-quality">Loading...</p>
+                </div>
+            </div>
+            <!-- Chart -->
+            <div class="chart-container">
+                <canvas id="chart"></canvas>
+            </div>
+        </main>
+    </div>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+        import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+
+        // Your Firebase configuration
+        const firebaseConfig = {
+    apiKey: "AIzaSyCzzB_xHaeuRLOsx0aWZRgaRYOMgivzMeU",
+    authDomain: "environment-monitoring-s-19cfd.firebaseapp.com",
+    databaseURL: "https://environment-monitoring-s-19cfd-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "environment-monitoring-s-19cfd",
+    storageBucket: "environment-monitoring-s-19cfd.appspot.com",
+    messagingSenderId: "812198309772",
+    appId: "1:812198309772:web:0ae4a87d44c070ea5830a9"
+  };
+
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        // Reference to temperature, humidity, and air quality data in Firebase
+        const temperatureRef = ref(database, 'DHT_11/Temperature');
+        const humidityRef = ref(database, 'DHT_11/Humidity');
+        const airQualityRef = ref(database, 'air_quality');
+
+        // Arrays to store historical data
+        let temperatureData = [];
+        let humidityData = [];
+        let airQualityData = [];
+        let timeLabels = [];
+
+        // Default threshold values
+        const defaultThresholds = {
+            temperature: { max: 30, min: 20 },
+            humidity: { max: 70, min: 40 },
+            airQuality: { max: 100, min: 80 }
+        };
+
+        // Chart.js initialization
+        const ctx = document.getElementById('chart').getContext('2d');
+        let chart;
+
+        // Alert system state
+        let alertSystemEnabled = true;
+
+        // Update temperature value on change
+        onValue(temperatureRef, (snapshot) => {
+            const temp = snapshot.val();
+            document.getElementById('temperature').innerHTML = temp ? `${temp}°C` : "--";
+            temperatureData.push(temp);
+            updateChart();
+            if (alertSystemEnabled) {
+                displayAlerts();
+            }
+        });
+
+        // Update humidity value on change
+        onValue(humidityRef, (snapshot) => {
+            const humi = snapshot.val();
+            document.getElementById('humidity').innerHTML = humi ? `${humi}%` : "--";
+            humidityData.push(humi);
+            if (alertSystemEnabled) {
+                displayAlerts();
+            }
+        });
+
+        // Update air quality value on change
+        onValue(airQualityRef, (snapshot) => {
+            const airQuality = snapshot.val();
+            document.getElementById('air-quality').innerHTML = airQuality ? airQuality : "--";
+            airQualityData.push(airQuality);
+            if (alertSystemEnabled) {
+                displayAlerts();
+            }
+        });
+
+        // Update chart
+        function updateChart() {
+            const currentTime = new Date();
+            timeLabels.push(currentTime.toLocaleTimeString());
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: temperatureData,
+                            borderColor: 'rgb(255, 99, 132)',
+                            fill: false
+                        },
+                        {
+                            label: 'Humidity (%)',
+                            data: humidityData,
+                            borderColor: 'rgb(54, 162, 235)',
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Download CSV button functionality
+        document.getElementById('downloadCsvBtn').addEventListener('click', downloadCsvData);
+
+        // Function to download CSV data
+        function downloadCsvData() {
+            // Format data into CSV format
+            let csvContent = "Time, Temperature (°C), Humidity (%), Air Quality\n";
+            for (let i = 0; i < timeLabels.length; i++) {
+                csvContent += `${timeLabels[i]},${temperatureData[i] || ''},${humidityData[i] || ''},${airQualityData[i] || ''}\n`;
+            }
+
+            // Create a Blob with the CSV content
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+
+            // Create a URL for the Blob
+            const url = URL.createObjectURL(blob);
+
+            // Create a link element and trigger the download
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", "environmental_data.csv");
+            document.body.appendChild(link);
+            link.click();
+
+            // Cleanup
+            URL.revokeObjectURL(url);
+        }
+
+        // Function to display alerts
+        function displayAlerts() {
+            const latestTemperature = temperatureData[temperatureData.length - 1];
+            const latestHumidity = humidityData[humidityData.length - 1];
+            const latestAirQuality = airQualityData[airQualityData.length - 1];
+
+            // Retrieve threshold values
+            const thresholds = {
+                temperature: { max: parseInt(document.getElementById('temperatureThresholdMax').value), min: parseInt(document.getElementById('temperatureThresholdMin').value) },
+                humidity: { max: parseInt(document.getElementById('humidityThresholdMax').value), min: parseInt(document.getElementById('humidityThresholdMin').value) },
+                airQuality: { max: parseInt(document.getElementById('airQualityThresholdMax').value), min: parseInt(document.getElementById('airQualityThresholdMin').value) }
+            };
+
+            // Check for alerts and display as popups
+            if ((latestTemperature > thresholds.temperature.max || latestTemperature < thresholds.temperature.min) && alertSystemEnabled) {
+                showAlert(`Temperature Alert: ${latestTemperature}°C`, 'temperature');
+            }
+
+            if ((latestHumidity > thresholds.humidity.max || latestHumidity < thresholds.humidity.min) && alertSystemEnabled) {
+                showAlert(`Humidity Alert: ${latestHumidity}%`, 'humidity');
+            }
+
+            if ((latestAirQuality > thresholds.airQuality.max || latestAirQuality < thresholds.airQuality.min) && alertSystemEnabled) {
+                showAlert(`Air Quality Alert: ${latestAirQuality}`, 'airQuality');
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertList = document.getElementById('alertList');
+            const alertItem = document.createElement('li');
+            alertItem.innerHTML = `<span class="blinking-circle"></span>${message}`;
+            alertList.appendChild(alertItem);
+            if (type === 'temperature' || type === 'humidity' || type === 'airQuality') {
+                alertItem.querySelector('.blinking-circle').classList.add('red');
+            }
+        }
+
+        // Toggle alert system
+        document.getElementById('toggleAlertBtn').addEventListener('click', () => {
+            alertSystemEnabled = !alertSystemEnabled;
+            const btnText = alertSystemEnabled ? 'Disable Alerts' : 'Enable Alerts';
+            document.getElementById('toggleAlertBtn').textContent = btnText;
+        });
+
+    </script>
+</body>
+</html>
